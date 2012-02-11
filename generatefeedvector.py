@@ -6,15 +6,22 @@ import sys
 import datetime
 from urllib import urlopen, quote_plus
 import MeCab
+import os
 
 
-feedlist={}                                     #titleとidの組み合わせ
-apcount={}                                      #単語の出現回数title通算で集計
-wordcounts={}                                   #単語の出現回数titleごとに集計
+
 # Returns title and dictionary of word counts
 def getwordcounts(url):
+  feedlist={}                                     #titleとidの組み合わせ
+  apcount={}                                      #単語の出現回数title通算で集計
+  wordcounts={}                                   #単語の出現回数titleごとに集計
   # Parse the feed
-  doc=xml.dom.minidom.parseString(urllib2.urlopen(url).read())
+  try:
+    r = urllib2.urlopen(url).read()
+    doc=xml.dom.minidom.parseString(r)
+  except:
+    print "error@", url, "!!"
+    return feedlist,apcount, {}
   incidents=doc.getElementsByTagName('incident') #incidentごとに
 
   for incident in incidents:
@@ -38,7 +45,7 @@ def getwordcounts(url):
       apcount.setdefault(word,0)
       if count>1:
         apcount[word]+=1
-  return feedlist,apcount,wc
+  return feedlist,apcount,wordcounts
 
 
 
@@ -64,10 +71,14 @@ def split(sentence):
 
 
 
-def go(num):
+def go(num, id):
   feedurl='http://www.sinsai.info/api?task=incidents&by=all&resp=xml&limit='
   feedurl += num
-  feedlist,apcount,wc=getwordcounts(feedurl)
+  if id!='0':
+    feedurl += '&by=catid&id='
+    feedurl += id
+  print feedurl
+  feedlist,apcount,wordcounts=getwordcounts(feedurl)
 
   wordlist=[]                     #１行目に表示する単語
   for w,bc in apcount.items():
@@ -76,8 +87,7 @@ def go(num):
       wordlist.append(w)
 
   d = datetime.datetime.today()
-  d_str = "%02d%02d%02d%02d%02d%02d" % (d.year,d.month,d.day,d.hour,d.minute,d.second)
-  out_file="data/blogdata"+d_str+".txt"
+  out_file='/var/www/cgi-bin/data/'+'blogdata'+num+"-"+id+".txt"
   out=file(out_file,'w')
   out.write('Blog')
   for word in wordlist: 
@@ -91,8 +101,9 @@ def go(num):
       if word in wc : out.write('\t%d' % wc[word])
       else: out.write('\t0')
     out.write('\n')
+  out.close()
 
-  return feedlist,d_str
+  return feedlist
 
 if __name__=='__main__':
   print sys.argv[1]
