@@ -3,6 +3,7 @@ import datetime
 import sys
 from PIL import Image,ImageDraw
 import ImageFont
+import os
 
 def readfile(filename):
   lines=[line for line in file(filename)]
@@ -41,6 +42,7 @@ def pearson(v1,v2):
   pSum=sum([v1[i]*v2[i] for i in range(len(v1))])
   
   # Calculate r (Pearson score)
+  if len(v1)==0: return 0
   num=pSum-(sum1*sum2/len(v1))
   den=sqrt((sum1Sq-pow(sum1,2)/len(v1))*(sum2Sq-pow(sum2,2)/len(v1)))
   if den==0: return 0
@@ -128,73 +130,83 @@ def getdepth(clust):
   # plus its own distance
   return max(getdepth(clust.left),getdepth(clust.right))+clust.distance
 
+H_SCALE=28 #縦の幅
 
-def drawdendrogram(clust,labels,jpeg='clusters.jpg'):
+def drawdendrogram(clust,labels,id_str,limit_str,feedlist):
   # height and width
-  h=getheight(clust)*20
-  w=1500
+  h=getheight(clust)*H_SCALE
+  w=1200
   depth=getdepth(clust)
 
   # width is fixed, so scale distances accordingly
-  scaling=float(w-600)/depth
-
-  # Create a new image with a white background
-  img=Image.new('RGB',(w,h),(255,255,255))
-  draw=ImageDraw.Draw(img)
-
-  draw.line((0,h/2,10,h/2),fill=(255,0,0))    
+  if depth==0: 
+    scaling=0
+  else:
+    scaling=float(w-600)/depth
 
   # Draw the first node
-  coords = drawnode(draw,clust,10,(h/2),scaling,labels)
+  t = ""
+  t = drawnode(clust,10,(h/2),scaling,labels,feedlist)
+  return t
 
-  img.save(jpeg,'JPEG')
-
-  return coords,h,w
-
-def drawnode(draw,clust,x,y,scaling,labels):
-  FONT_SIZE=15
-  FONT_FILE="/usr/share/fonts/truetype/ttf-japanese-gothic.ttf"
-
+def drawnode(clust,x,y,scaling,labels,feedlist):
   coords = {}
   
-  fnt=ImageFont.truetype(FONT_FILE, FONT_SIZE, encoding='utf-8')
+
+  t=''
+
   if clust.id<0:
-    h1=getheight(clust.left)*20
-    h2=getheight(clust.right)*20
+    h1=getheight(clust.left)*H_SCALE
+    h2=getheight(clust.right)*H_SCALE
     top=y-(h1+h2)/2
     bottom=y+(h1+h2)/2
     # Line length
     ll=clust.distance*scaling
+
     # Vertical line from this cluster to children    
-    draw.line((x,top+h1/2,x,bottom-h2/2),fill=(255,0,0))    
-    
+    t+='<div class="cap"  style="top:'+str(top+h1/2)+"px;left:"+str(x)+"px;height:"+str(h1/2 + h2/2)+'px;"></div>';        
     # Horizontal line to left item
-    draw.line((x,top+h1/2,x+ll,top+h1/2),fill=(255,0,0))    
-
+    t+='<div class="drop" style="top:'+str(top+h1/2)+"px;left:"+str(x)+"px;width:"+str(ll)+'px;">&nbsp;</div>';     
     # Horizontal line to right item
-    draw.line((x,bottom-h2/2,x+ll,bottom-h2/2),fill=(255,0,0))        
+    t+='<div class="drop" style="top:'+str(bottom-h2/2)+"px;left:"+str(x)+"px;width:"+str(ll)+'px;">&nbsp;</div>';        
 
-    # Call the function to draw the left and right nodes    
-    coords.update(drawnode(draw,clust.left,x+ll,top+h1/2,scaling,labels))
-    coords.update(drawnode(draw,clust.right,x+ll,bottom-h2/2,scaling,labels))
+    # Call the function to draw the left and right nodes
+    t += drawnode(clust.left,x+ll,top+h1/2,scaling,labels,feedlist)
+    t += drawnode(clust.right,x+ll,bottom-h2/2,scaling,labels,feedlist)
+
   else:   
     # If this is an endpoint, draw the item label
     title = unicode(labels[clust.id],"utf-8")
-    draw.text((x+5,y-7),title,font=fnt, fill='black')
-    coords[title]=[(x+5),(y-7),(x+5+len(title)*FONT_SIZE),(y-7+FONT_SIZE)]
+
+    #y 　縦 x 　 横
+    #top 縦 left 横
+    color = "#f0f0f0"
+    t+='<div class="leaf" style="background:'+color+";top:"+str(y-7)+"px;left:"+str(x+5)+'px;"><b>'+'<a href="http://www.sinsai.info/reports/view/'+feedlist[title]+'">'+ title+'</a></b></div>';
+
+  return t
 
 
-  return coords
-
-
-def go(d_str):
-    in_file="data/blogdata" + d_str + ".txt"
+def go(limit_str,id_str,feedlist):
+    in_file='/var/www/cgi-bin/data/blogdata' + limit_str + "-" + id_str + ".txt"
+    out_file = '/var/www/cgi-bin/data/blogclust' + limit_str + '-' + id_str + '.txt'
     blognames,words,data=readfile(in_file)
-    clust=hcluster(data)
-    jpg_name="data/blogclust" + d_str + ".jpg"
-    coords,h,w = drawdendrogram(clust,blognames,jpeg=jpg_name)
-    return coords,h,w,jpg_name
+    if len(data)==0:
+#  print t
+      t = '<h1>Dataがありません</h1>'
 
+      f = open(out_file, "w")
+      f.write(t)
+      f.close()
+      return t 
+      
+    clust=hcluster(data)
+    t = drawdendrogram(clust,blognames,id_str,limit_str,feedlist)
+#  print t
+    f = open(out_file, "w")
+    f.write(t)
+    f.close()
+    return t
+    
 if __name__=='__main__':
   go(sys.argv[1])
 
